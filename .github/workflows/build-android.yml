@@ -21,10 +21,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 安装 Android SDK 34
+      - name: 安装 Android SDK 34 + JAXB
         run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || \
-          $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
+          # 安装 JAXB（Java 17 缺少 javax.xml.bind）
+          wget -q "https://repo1.maven.org/maven2/javax/xml/bind/jaxb-api/2.3.1/jaxb-api-2.3.1.jar"
+          wget -q "https://repo1.maven.org/maven2/org/glassfish/jaxb/jaxb-runtime/2.3.8/jaxb-runtime-2.3.8.jar"
+          wget -q "https://repo1.maven.org/maven2/javax/activation/javax.activation-api/1.2.0/javax.activation-api-1.2.0.jar"
+          mkdir -p $ANDROID_HOME/lib/
+          cp *.jar $ANDROID_HOME/lib/
+
+          # 安装 SDK
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" || \
+          $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" || true
           echo "sdk.dir=$ANDROID_HOME" > android_app/local.properties
 
       - name: 下载并安装 Gradle
@@ -33,7 +41,6 @@ jobs:
           unzip -q "gradle-${GRADLE_VERSION}-bin.zip"
           echo "GRADLE_HOME=$PWD/gradle-${GRADLE_VERSION}" >> $GITHUB_ENV
           echo "$PWD/gradle-${GRADLE_VERSION}/bin" >> $GITHUB_PATH
-          gradle --version
 
       - name: 编译 APK
         run: |

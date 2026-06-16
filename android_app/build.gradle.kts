@@ -1,6 +1,7 @@
 buildscript {
     dependencies {
-        classpath("jakarta.xml.bind:jakarta.xml.bind-api:4.0.0")
+        classpath("javax.xml.bind:jaxb-api:2.3.1")
+        classpath("org.glassfish.jaxb:jaxb-runtime:2.3.8")
     }
 }
 
