@@ -3,8 +3,6 @@ package com.smartdoorlock.app.ui
 import android.content.pm.PackageManager
 import android.Manifest
 import android.os.Build
-import android.provider.Settings
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,14 +56,13 @@ fun MainScreen(
     var username by remember { mutableStateOf(api.getUsername() ?: "") }
     var showPwdDialog by remember { mutableStateOf(false) }
     var pwdInput by remember { mutableStateOf("") }
-    var showLocationDialog by remember { mutableStateOf(false) }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
         if (granted.all { it.value }) {
-            checkLocationAndScan(bleManager, context, scope, snackbarHostState) { showLocationDialog = true }
+            checkLocationAndScan(bleManager, context, scope, snackbarHostState)
         } else {
             scope.launch { snackbarHostState.showSnackbar("需要蓝牙权限才能连接门锁") }
         }
@@ -290,34 +287,6 @@ fun MainScreen(
             dismissButton = { TextButton(onClick = { showPwdDialog = false }) { Text("取消", color = Color(0xFF999999)) } }
         )
     }
-
-    // ── 位置服务提示对话框 ──
-    if (showLocationDialog) {
-        AlertDialog(
-            onDismissRequest = { showLocationDialog = false },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = Color(0xFF161628),
-            title = { Text("需要位置服务", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(), color = Color(0xFFe0e0e0), fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Android 系统要求开启位置服务才能搜索到蓝牙设备。\n\n请前往系统设置开启位置服务后重试。",
-                    color = Color(0xFFaaaaaa),
-                    fontSize = 14.sp
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showLocationDialog = false
-                    context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0f9b8e))) {
-                    Text("去设置", color = Color.White)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showLocationDialog = false }) { Text("取消", color = Color(0xFF999999)) } }
-        )
-    }
 }
 
 @Composable
@@ -342,15 +311,14 @@ private fun checkLocationAndScan(
     bleManager: BleManager,
     context: android.content.Context,
     scope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-    onNeedLocation: () -> Unit  // 外部触发弹窗
+    snackbarHostState: SnackbarHostState
 ) {
+    // Android 需要位置服务开启才能进行 BLE 扫描（大多数国产手机强依赖）
     val locManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
     val locEnabled = locManager?.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) == true ||
                     locManager?.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER) == true
     if (!locEnabled) {
-        onNeedLocation()
-        return  // 不扫描！和 easyble-x 行为一致
+        scope.launch { snackbarHostState.showSnackbar("请在系统设置中开启位置服务，否则搜不到蓝牙设备") }
     }
     bleManager.startScan()
 }
@@ -372,7 +340,7 @@ private fun checkAndConnect(
         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     if (perms.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
-        checkLocationAndScan(bleManager, context, scope, snackbarHostState) { showLocationDialog = true }
+        checkLocationAndScan(bleManager, context, scope, snackbarHostState)
     } else {
         permLauncher.launch(perms)
     }
