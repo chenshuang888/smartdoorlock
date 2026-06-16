@@ -32,6 +32,7 @@ static bool         s_has_key = false;
 static bool         s_pending_bond = false;   /* 配对中，订阅后发送 [BOND] */
 static bool         s_pairing_mode = false;   /* 51 按 # 进入配对模式 */
 static bool         s_just_paired = false;    /* 刚完成配对，认证成功时通知 51 */
+static bool         s_hello_received = false; /* [HELLO] 是否已到达 */
 
 /* ============================================================================
  * 工具函数
@@ -115,6 +116,7 @@ static void send_bond_msg(void)
 static void on_conn_change(bool connected)
 {
     if (connected) {
+        s_hello_received = false;
         /* 配对模式 → 生成/替换密钥，标记待发送 [BOND] */
         if (s_pairing_mode) {
             s_pairing_mode = false;
@@ -138,6 +140,7 @@ static void on_conn_change(bool connected)
         s_pending_bond = false;
         s_pairing_mode = false;
         s_just_paired = false;
+        s_hello_received = false;
         if (s_has_key) {
             s_state = AUTH_LOCKED;
             ble_driver_start_advertising();  /* 已配对 — 允许手机重连 */
@@ -187,7 +190,8 @@ static void on_uart_rx(const uint8_t *data, size_t len)
 
     /* ---- 握手命令 [HELLO]：拉取式配对协议 ---- */
     if (len >= 7 && memcmp(data, "[HELLO]", 7) == 0) {
-        ESP_LOGI(TAG, "[FW v2] [HELLO] received, pending_bond=%d", s_pending_bond);
+        s_hello_received = true;
+        ESP_LOGI(TAG, "<<< [HELLO] received, pending_bond=%d >>>", s_pending_bond);
         if (s_pending_bond) {
             s_pending_bond = false;
             send_bond_msg();
@@ -212,6 +216,8 @@ static void on_uart_rx(const uint8_t *data, size_t len)
             const char *hex = (const char *)data + 7;
             uint8_t got[KEY_LEN];
             bool ok = true;
+
+            ESP_LOGI(TAG, "[AUTH] received (hello=%s)", s_hello_received ? "YES" : "NO");
 
             for (int i = 0; i < KEY_LEN; i++) {
                 uint8_t h = hex_nibble(hex[i * 2]);
