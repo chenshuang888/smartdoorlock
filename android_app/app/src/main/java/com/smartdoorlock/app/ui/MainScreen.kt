@@ -362,9 +362,18 @@ private fun handleBleData(
             logBleAction(api, "配对", "收到新密钥")
         }
         text.startsWith("[READY]") -> {
-            val key = api.getBleKey()
+            var key = api.getBleKey()
+            if (key == null) {
+                key = try {
+                    val res = api.getKey()
+                    val k = res.optString("key", "")
+                    if (k.length >= 32) { api.saveBleKey(k); k } else null
+                } catch (_: Exception) { null }
+            }
             if (key != null) {
                 bleManager.send("[AUTH] $key\n")
+            } else {
+                showMsg("未配对，请按门锁 # 键进入配对模式")
             }
         }
         text.startsWith("[OK]") -> {
