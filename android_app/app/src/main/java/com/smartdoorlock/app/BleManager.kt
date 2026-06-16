@@ -212,5 +212,14 @@ class BleManager(private val context: Context) {
             val data = String(characteristic.value ?: return, Charsets.UTF_8).trim()
             if (data.isNotEmpty()) onDataReceived?.invoke(data)
         }
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            val data = String(value, Charsets.UTF_8).trim()
+            if (data.isNotEmpty()) onDataReceived?.invoke(data)
+        }
     }
 }
