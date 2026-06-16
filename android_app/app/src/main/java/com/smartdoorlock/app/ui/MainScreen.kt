@@ -28,6 +28,7 @@ import com.smartdoorlock.app.BleManager
 import com.smartdoorlock.app.DoorLockApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
