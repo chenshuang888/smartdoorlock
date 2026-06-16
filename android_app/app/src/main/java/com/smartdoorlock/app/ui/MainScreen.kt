@@ -56,6 +56,7 @@ fun MainScreen(
     var username by remember { mutableStateOf(api.getUsername() ?: "") }
     var showPwdDialog by remember { mutableStateOf(false) }
     var pwdInput by remember { mutableStateOf("") }
+    var pingMs by remember { mutableStateOf<Long?>(null) }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
@@ -108,7 +109,11 @@ fun MainScreen(
             deviceName = ""
         }
         bleManager.onDataReceived = { text ->
-            handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
+            if (text == "[PONG]") {
+                pingMs = System.currentTimeMillis() - (pingMs ?: 0L)
+            } else {
+                handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
+            }
         }
     }
 
@@ -229,6 +234,25 @@ fun MainScreen(
             ) { Text(btnText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
 
             Spacer(Modifier.height(20.dp))
+
+            // ── 连通性测试（连接后可见）──
+            if (uiState is UiState.Connected || uiState is UiState.Authenticated) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            pingMs = System.currentTimeMillis()
+                            bleManager.send("[PING]\n")
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2a2a3e))
+                    ) { Text("📡 测速", fontSize = 12.sp, color = Color(0xFFaaaaaa)) }
+                    Spacer(Modifier.width(12.dp))
+                    pingMs?.let { ms ->
+                        Text("${ms}ms", fontSize = 14.sp, color = if (ms < 500) Color(0xFF2ecc71) else Color(0xFFe74c3c))
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+            }
 
             // ── Action Grid ──
             AnimatedVisibility(visible = uiState is UiState.Authenticated) {

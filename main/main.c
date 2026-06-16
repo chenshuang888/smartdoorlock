@@ -176,6 +176,14 @@ static void on_uart_rx(const uint8_t *data, size_t len)
         return;
     }
 
+    /* ---- PING 测试：手机端测双向通路 ---- */
+    if (len >= 6 && memcmp(data, "[PING]", 6) == 0) {
+        ESP_LOGI(TAG, "<<< [PING] from phone >>>");
+        uart_service_send((const uint8_t *)"[PONG]\n", 7);
+        ESP_LOGI(TAG, ">>> [PONG] sent to phone <<<");
+        return;
+    }
+
     /* ---- 所有状态下均先处理 [UNPAIR] ---- */
     if (len >= 8 && memcmp(data, "[UNPAIR]", 8) == 0) {
         erase_key();
