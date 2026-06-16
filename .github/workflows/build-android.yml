@@ -24,13 +24,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 设置 Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 SDK 34
+      - name: 安装 Android SDK 34
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
-          yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || \
+          $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: 设置 Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -38,10 +36,12 @@ jobs:
           gradle-version: '8.5'
 
       - name: 生成 Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.5
+        run: |
+          gradle wrapper --gradle-version 8.5
+          ls -la gradlew gradle/wrapper/
 
       - name: 构建 Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
