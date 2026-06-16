@@ -13,6 +13,8 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.Intent
+import android.location.LocationManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import java.util.UUID
@@ -45,11 +47,18 @@ class BleManager(private val context: Context) {
     var onScanFailed: ((String) -> Unit)? = null
     var onDeviceNotFound: (() -> Unit)? = null
     var onDeviceFound: ((String) -> Unit)? = null
+    var onScannerUnavailable: (() -> Unit)? = null
 
     val isConnected: Boolean get() = gatt?.services?.isNotEmpty() == true
 
     fun isBluetoothEnabled(): Boolean =
         bluetoothAdapter?.isEnabled == true
+
+    fun isLocationEnabled(): Boolean {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        return lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+               lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
 
     fun enableBluetooth() {
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
@@ -60,10 +69,14 @@ class BleManager(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            val name = result.scanRecord?.deviceName ?: device?.name ?: ""
+            // ScanRecord deviceName 来自广播包，device.name 在 API 31+ 需要 CONNECT 权限
+            val name = (result.scanRecord?.deviceName ?: device?.name ?: "").trim()
             if (name.isNotEmpty()) onDeviceFound?.invoke(name)
 
-            if (name.equals(DEVICE_NAME, ignoreCase = true)) {
+            // 同时检查广播包中的名称和 device name
+            if (name.equals(DEVICE_NAME, ignoreCase = true) ||
+                device?.name?.trim()?.equals(DEVICE_NAME, ignoreCase = true) == true
+            ) {
                 stopScan()
                 device?.let { connect(it) }
             }
@@ -92,6 +105,7 @@ class BleManager(private val context: Context) {
 
         val scanner = adapter.bluetoothLeScanner ?: run {
             isScanning = false
+            onScannerUnavailable?.invoke()
             onScanFailed?.invoke("蓝牙扫描器不可用")
             return
         }
