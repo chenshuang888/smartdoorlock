@@ -107,7 +107,7 @@ fun MainScreen(
             deviceName = ""
         }
         bleManager.onDataReceived = { text ->
-            handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
+            handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d }, scope)
         }
     }
 
@@ -342,7 +342,8 @@ private fun checkAndConnect(
 private fun handleBleData(
     text: String, bleManager: BleManager, api: DoorLockApi,
     setUiState: (UiState) -> Unit, setBleKey: (String) -> Unit,
-    showMsg: (String) -> Unit, setDeviceName: (String) -> Unit
+    showMsg: (String) -> Unit, setDeviceName: (String) -> Unit,
+    scope: CoroutineScope
 ) {
     when {
         text.startsWith("[BOND] ") -> {
@@ -354,7 +355,10 @@ private fun handleBleData(
             setBleKey(hex)
             showMsg("收到配对密钥")
             try { api.saveKey(hex) } catch (_: Exception) {}
-            bleManager.send("[AUTH] $hex\n")
+            scope.launch {
+                delay(300)
+                bleManager.send("[AUTH] $hex\n")
+            }
             logBleAction(api, "配对", "收到新密钥")
         }
         text.startsWith("[READY]") -> {
@@ -367,7 +371,10 @@ private fun handleBleData(
                 } catch (_: Exception) { null }
             }
             if (key != null) {
-                bleManager.send("[AUTH] $key\n")
+                scope.launch {
+                    delay(300)
+                    bleManager.send("[AUTH] $key\n")
+                }
             } else {
                 showMsg("未配对，请按门锁 # 键进入配对模式")
             }
