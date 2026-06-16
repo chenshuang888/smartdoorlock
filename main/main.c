@@ -200,8 +200,6 @@ static void on_uart_rx(const uint8_t *data, size_t len)
     if (len >= 7 && memcmp(data, "[HELLO]", 7) == 0) {
         s_hello_received = true;
         ESP_LOGI(TAG, "<<< [HELLO] received, pending_bond=%d >>>", s_pending_bond);
-        /* 延时 1 秒再发 [BOND]/[READY]，腾出时间给 Android BLE 栈稳定 */
-        vTaskDelay(pdMS_TO_TICKS(1000));
         if (s_pending_bond) {
             s_pending_bond = false;
             send_bond_msg();
