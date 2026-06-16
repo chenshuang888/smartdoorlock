@@ -9,7 +9,6 @@
 #include "host/ble_store.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "host/ble_gattc.h"
 
 void ble_store_config_init(void);
 
@@ -82,8 +81,6 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0) {
             s_conn_handle  = event->connect.conn_handle;
             s_is_connected = true;
-            /* 发起 MTU 协商，确保大消息可单包通知 */
-            ble_gattc_exchange_mtu(s_conn_handle, NULL, NULL);
             if (s_conn_cb) s_conn_cb(true);
         } else {
             ble_driver_start_advertising();
