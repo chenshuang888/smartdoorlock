@@ -57,10 +57,6 @@ fun MainScreen(
     var username by remember { mutableStateOf(api.getUsername() ?: "") }
     var showPwdDialog by remember { mutableStateOf(false) }
     var pwdInput by remember { mutableStateOf("") }
-    var pingMs by remember { mutableStateOf<Long?>(null) }
-    var pingResult by remember { mutableStateOf("") }
-    var lastRx by remember { mutableStateOf("") }
-    var lastTx by remember { mutableStateOf("") }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
@@ -113,15 +109,7 @@ fun MainScreen(
             deviceName = ""
         }
         bleManager.onDataReceived = { text ->
-            lastRx = "(${text.length}) ${text.take(60)}"
-            if (text == "[PONG]") {
-                pingMs = (pingMs ?: 0L) + 1
-            } else {
-                handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
-            }
-        }
-        bleManager.onDataSent = { text ->
-            lastTx = text.take(50)
+            handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
         }
     }
 
@@ -243,43 +231,6 @@ fun MainScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // ── 连通性测试（连接后可见）──
-            if (uiState is UiState.Connected || uiState is UiState.Authenticated) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = {
-                            pingMs = 0
-                            pingResult = ""
-                            scope.launch {
-                                val total = 10
-                                for (i in 1..total) {
-                                    if (!bleManager.send("[PING]\n")) break
-                                    delay(200)
-                                }
-                                delay(1500)
-                                val got = pingMs ?: 0
-                                val lost = total - got.toInt()
-                                pingResult = "📡 ${got}/${total} 成功"
-                                if (lost > 0) pingResult += "，丢 $lost"
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2a2a3e))
-                    ) { Text("📡 批量测速 x10", fontSize = 12.sp, color = Color(0xFFaaaaaa)) }
-                    Spacer(Modifier.width(8.dp))
-                    if (pingResult.isNotEmpty()) {
-                        Text(pingResult, fontSize = 13.sp, color = Color(0xFFaaaaaa))
-                    }
-                }
-                if (lastTx.isNotEmpty()) {
-                    Text("TX: $lastTx", fontSize = 11.sp, color = Color(0xFF555555))
-                }
-                if (lastRx.isNotEmpty()) {
-                    Text("RX: $lastRx", fontSize = 11.sp, color = Color(0xFF555555))
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
             // ── Action Grid ──
             AnimatedVisibility(visible = uiState is UiState.Authenticated) {
                 Column {
@@ -293,12 +244,6 @@ fun MainScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         ActionCard(icon = "🗑", label = "解绑门锁", modifier = Modifier.weight(1f), isDanger = true, onClick = {
                             if (bleManager.send("[UNPAIR]\n")) scope.launch { snackbarHostState.showSnackbar("正在解绑…") }
-                        })
-                        ActionCard(icon = "📋", label = "测试记录", modifier = Modifier.weight(1f), onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                try { api.addLog("测试操作", "一条测试记录"); withContext(Dispatchers.Main) { snackbarHostState.showSnackbar("已记录操作") } }
-                                catch (_: Exception) {}
-                            }
                         })
                     }
                 }
