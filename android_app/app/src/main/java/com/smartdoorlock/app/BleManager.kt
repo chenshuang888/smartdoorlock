@@ -36,6 +36,7 @@ class BleManager(private val context: Context) {
     private var rxChar: BluetoothGattCharacteristic? = null
     private var txChar: BluetoothGattCharacteristic? = null
     private var isScanning = false
+    private var pendingCccdWrite = false  // 等待 descriptor 写入完成再触发 onConnected
     private val mainHandler = Handler(Looper.getMainLooper())
 
     var onConnected: (() -> Unit)? = null
@@ -136,6 +137,7 @@ class BleManager(private val context: Context) {
         gatt = null
         rxChar = null
         txChar = null
+        pendingCccdWrite = false
     }
 
     @Suppress("DEPRECATION")
@@ -152,6 +154,7 @@ class BleManager(private val context: Context) {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    pendingCccdWrite = false
                     gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -159,6 +162,7 @@ class BleManager(private val context: Context) {
                     this@BleManager.gatt = null
                     rxChar = null
                     txChar = null
+                    pendingCccdWrite = false
                     onDisconnected?.invoke()
                 }
             }
@@ -171,16 +175,34 @@ class BleManager(private val context: Context) {
             rxChar = service.getCharacteristic(UUID.fromString(RX_UUID))
             txChar = service.getCharacteristic(UUID.fromString(TX_UUID))
 
-            txChar?.let { tx ->
-                // 启用通知
+            val tx = txChar
+            if (tx != null) {
+                // 启用通知：writeDescriptor 是异步的，等它完成后才触发 onConnected
                 gatt.setCharacteristicNotification(tx, true)
                 val desc = tx.getDescriptor(UUID.fromString(CCCD_UUID))
-                desc?.let {
-                    it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    gatt.writeDescriptor(it)
+                if (desc != null) {
+                    pendingCccdWrite = true
+                    desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    gatt.writeDescriptor(desc)
+                } else {
+                    // 没有 CCCD，直接触发（某些设备不需要通知启用）
+                    onConnected?.invoke()
                 }
+            } else {
+                // 没有 TX 特征值，直接触发
+                onConnected?.invoke()
             }
-            onConnected?.invoke()
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            if (pendingCccdWrite && descriptor.uuid.toString().equals(CCCD_UUID, ignoreCase = true)) {
+                pendingCccdWrite = false
+                onConnected?.invoke()
+            }
         }
 
         override fun onCharacteristicChanged(
