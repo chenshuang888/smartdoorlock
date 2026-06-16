@@ -90,9 +90,7 @@ fun MainScreen(
             scope.launch { snackbarHostState.showSnackbar(msg) }
             uiState = UiState.Disconnected
         }
-        bleManager.onDeviceFound = { name ->
-            scope.launch { snackbarHostState.showSnackbar("发现设备: $name", duration = SnackbarDuration.Short) }
-        }
+        bleManager.onDeviceFound = { }
         bleManager.onDeviceNotFound = {
             scope.launch { snackbarHostState.showSnackbar("未找到门锁，请确保门锁处于广播状态") }
             uiState = UiState.Disconnected
