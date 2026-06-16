@@ -178,30 +178,25 @@ class BleManager(private val context: Context) {
             rxChar = service.getCharacteristic(UUID.fromString(RX_UUID))
             txChar = service.getCharacteristic(UUID.fromString(TX_UUID))
 
-            // 请求 MTU 升级，确保大消息能一次性通知送达
-            gatt.requestMtu(517)
+            // 先本地注册通知，再请求 MTU 升级（CCCD 写入推迟到 onMtuChanged）
+            txChar?.let { gatt.setCharacteristicNotification(it, true) }
 
-            val tx = txChar
-            if (tx != null) {
-                // 启用通知：writeDescriptor 是异步的，等它完成后才触发 onConnected
-                gatt.setCharacteristicNotification(tx, true)
-                val desc = tx.getDescriptor(UUID.fromString(CCCD_UUID))
-                if (desc != null) {
-                    pendingCccdWrite = true
-                    desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    gatt.writeDescriptor(desc)
-                } else {
-                    // 没有 CCCD，直接触发（某些设备不需要通知启用）
-                    onConnected?.invoke()
-                }
-            } else {
-                // 没有 TX 特征值，直接触发
-                onConnected?.invoke()
-            }
+            gatt.requestMtu(517)
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             android.util.Log.i("ble_mtu", "MTU negotiated: $mtu (status=$status)")
+
+            // MTU 协商完成后，再写 CCCD 启用通知，避免异步操作冲突
+            val tx = txChar ?: run { onConnected?.invoke(); return }
+            val desc = tx.getDescriptor(UUID.fromString(CCCD_UUID))
+            if (desc != null) {
+                pendingCccdWrite = true
+                desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                gatt.writeDescriptor(desc)
+            } else {
+                onConnected?.invoke()
+            }
         }
 
         override fun onDescriptorWrite(
