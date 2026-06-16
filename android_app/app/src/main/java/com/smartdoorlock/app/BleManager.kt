@@ -142,16 +142,15 @@ class BleManager(private val context: Context) {
         pendingCccdWrite = false
     }
 
+    @Suppress("DEPRECATION")
     fun send(data: String): Boolean {
         val char = rxChar ?: return false
-        val g = gatt ?: return false
-        try {
+        val ok = try {
             char.value = data.toByteArray(Charsets.UTF_8)
-            // 切到主线程写，避免从 binder 线程直接写时静默失败
-            mainHandler.post { g.writeCharacteristic(char) }
-            onDataSent?.invoke(data.trim())
-            return true
-        } catch (_: Exception) { return false }
+            gatt?.writeCharacteristic(char) ?: false
+        } catch (_: Exception) { false }
+        onDataSent?.invoke(data.trim())
+        return ok
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -223,7 +222,7 @@ class BleManager(private val context: Context) {
             characteristic: BluetoothGattCharacteristic
         ) {
             val data = String(characteristic.value ?: return, Charsets.UTF_8).trim()
-            if (data.isNotEmpty()) onDataReceived?.invoke(data)
+            if (data.isNotEmpty()) mainHandler.post { onDataReceived?.invoke(data) }
         }
 
         override fun onCharacteristicChanged(
@@ -232,7 +231,7 @@ class BleManager(private val context: Context) {
             value: ByteArray
         ) {
             val data = String(value, Charsets.UTF_8).trim()
-            if (data.isNotEmpty()) onDataReceived?.invoke(data)
+            if (data.isNotEmpty()) mainHandler.post { onDataReceived?.invoke(data) }
         }
     }
 }
