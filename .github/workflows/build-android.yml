@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  GRADLE_VERSION: 8.5
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,22 +21,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 设置 Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 SDK 34
+      - name: 安装 Android SDK 34
         run: |
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || \
           $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
           echo "sdk.dir=$ANDROID_HOME" > android_app/local.properties
 
-      - name: 设置 Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
+      - name: 下载并安装 Gradle
+        run: |
+          wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+          unzip -q "gradle-${GRADLE_VERSION}-bin.zip"
+          echo "GRADLE_HOME=$PWD/gradle-${GRADLE_VERSION}" >> $GITHUB_ENV
+          echo "$PWD/gradle-${GRADLE_VERSION}/bin" >> $GITHUB_PATH
+          gradle --version
 
       - name: 编译 APK
-        run: cd android_app && gradle assembleDebug --no-daemon
+        run: |
+          cd android_app
+          gradle assembleDebug --no-daemon --stacktrace 2>&1
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
