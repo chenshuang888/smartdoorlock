@@ -113,7 +113,7 @@ fun MainScreen(
             deviceName = ""
         }
         bleManager.onDataReceived = { text ->
-            lastRx = text.take(50)
+            lastRx = "(${text.length}) ${text.take(60)}"
             if (text == "[PONG]") {
                 pingMs = (pingMs ?: 0L) + 1
             } else {
@@ -272,10 +272,10 @@ fun MainScreen(
                     }
                 }
                 if (lastTx.isNotEmpty()) {
-                    Text("TX: $lastTx", fontSize = 11.sp, color = Color(0xFF555555), maxLines = 1)
+                    Text("TX: $lastTx", fontSize = 11.sp, color = Color(0xFF555555))
                 }
                 if (lastRx.isNotEmpty()) {
-                    Text("RX: $lastRx", fontSize = 11.sp, color = Color(0xFF555555), maxLines = 1)
+                    Text("RX: $lastRx", fontSize = 11.sp, color = Color(0xFF555555))
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -404,7 +404,10 @@ private fun handleBleData(
     when {
         text.startsWith("[BOND] ") -> {
             val hex = text.removePrefix("[BOND] ").trim()
-            if (hex.length < 32) return
+            if (hex.length < 32) {
+                showMsg("⚠️ [BOND] 密钥不完整: len=${hex.length} hex=$hex")
+                return
+            }
             setBleKey(hex)
             showMsg("收到配对密钥")
             try { api.saveKey(hex) } catch (_: Exception) {}
