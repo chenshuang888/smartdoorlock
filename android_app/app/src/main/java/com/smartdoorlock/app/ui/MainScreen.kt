@@ -60,6 +60,7 @@ fun MainScreen(
     var pingMs by remember { mutableStateOf<Long?>(null) }
     var pingResult by remember { mutableStateOf("") }
     var lastRx by remember { mutableStateOf("") }
+    var lastTx by remember { mutableStateOf("") }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
@@ -118,6 +119,9 @@ fun MainScreen(
             } else {
                 handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
             }
+        }
+        bleManager.onDataSent = { text ->
+            lastTx = text.take(50)
         }
     }
 
@@ -266,6 +270,9 @@ fun MainScreen(
                     if (pingResult.isNotEmpty()) {
                         Text(pingResult, fontSize = 13.sp, color = Color(0xFFaaaaaa))
                     }
+                }
+                if (lastTx.isNotEmpty()) {
+                    Text("TX: $lastTx", fontSize = 11.sp, color = Color(0xFF555555), maxLines = 1)
                 }
                 if (lastRx.isNotEmpty()) {
                     Text("RX: $lastRx", fontSize = 11.sp, color = Color(0xFF555555), maxLines = 1)

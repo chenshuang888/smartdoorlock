@@ -42,6 +42,7 @@ class BleManager(private val context: Context) {
     var onConnected: (() -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
     var onDataReceived: ((String) -> Unit)? = null
+    var onDataSent: ((String) -> Unit)? = null
     var onStartScan: (() -> Unit)? = null
     var onScanFailed: ((String) -> Unit)? = null
     var onDeviceNotFound: (() -> Unit)? = null
@@ -143,10 +144,12 @@ class BleManager(private val context: Context) {
     @Suppress("DEPRECATION")
     fun send(data: String): Boolean {
         val char = rxChar ?: return false
-        return try {
+        val ok = try {
             char.value = data.toByteArray(Charsets.UTF_8)
             gatt?.writeCharacteristic(char) ?: false
         } catch (_: Exception) { false }
+        onDataSent?.invoke(data.trim())
+        return ok
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
