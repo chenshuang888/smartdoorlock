@@ -59,6 +59,7 @@ fun MainScreen(
     var pwdInput by remember { mutableStateOf("") }
     var pingMs by remember { mutableStateOf<Long?>(null) }
     var pingResult by remember { mutableStateOf("") }
+    var lastRx by remember { mutableStateOf("") }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
@@ -111,6 +112,7 @@ fun MainScreen(
             deviceName = ""
         }
         bleManager.onDataReceived = { text ->
+            lastRx = text.take(50)
             if (text == "[PONG]") {
                 pingMs = (pingMs ?: 0L) + 1
             } else {
@@ -264,6 +266,9 @@ fun MainScreen(
                     if (pingResult.isNotEmpty()) {
                         Text(pingResult, fontSize = 13.sp, color = Color(0xFFaaaaaa))
                     }
+                }
+                if (lastRx.isNotEmpty()) {
+                    Text("RX: $lastRx", fontSize = 11.sp, color = Color(0xFF555555), maxLines = 1)
                 }
                 Spacer(Modifier.height(16.dp))
             }
