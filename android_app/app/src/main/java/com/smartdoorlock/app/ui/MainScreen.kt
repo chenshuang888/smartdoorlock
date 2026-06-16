@@ -57,6 +57,7 @@ fun MainScreen(
     var showPwdDialog by remember { mutableStateOf(false) }
     var pwdInput by remember { mutableStateOf("") }
     var pingMs by remember { mutableStateOf<Long?>(null) }
+    var pingResult by remember { mutableStateOf("") }
 
     // BLE 权限请求
     val permLauncher = rememberLauncherForActivityResult(
@@ -110,7 +111,7 @@ fun MainScreen(
         }
         bleManager.onDataReceived = { text ->
             if (text == "[PONG]") {
-                pingMs = System.currentTimeMillis() - (pingMs ?: 0L)
+                pingMs = (pingMs ?: 0L) + 1
             } else {
                 handleBleData(text, bleManager, api, { uiState = it }, { k -> bleKey = k; api.saveBleKey(k) }, { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }, { d -> deviceName = d })
             }
@@ -237,21 +238,33 @@ fun MainScreen(
 
             // ── 连通性测试（连接后可见）──
             if (uiState is UiState.Connected || uiState is UiState.Authenticated) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = {
-                            pingMs = System.currentTimeMillis()
-                            bleManager.send("[PING]\n")
+                            pingMs = 0
+                            pingResult = ""
+                            scope.launch {
+                                val total = 10
+                                for (i in 1..total) {
+                                    if (!bleManager.send("[PING]\n")) break
+                                    delay(200)
+                                }
+                                delay(1500)
+                                val got = pingMs ?: 0
+                                val lost = total - got.toInt()
+                                pingResult = "📡 ${got}/${total} 成功"
+                                if (lost > 0) pingResult += "，丢 $lost"
+                            }
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2a2a3e))
-                    ) { Text("📡 测速", fontSize = 12.sp, color = Color(0xFFaaaaaa)) }
-                    Spacer(Modifier.width(12.dp))
-                    pingMs?.let { ms ->
-                        Text("${ms}ms", fontSize = 14.sp, color = if (ms < 500) Color(0xFF2ecc71) else Color(0xFFe74c3c))
+                    ) { Text("📡 批量测速 x10", fontSize = 12.sp, color = Color(0xFFaaaaaa)) }
+                    Spacer(Modifier.width(8.dp))
+                    if (pingResult.isNotEmpty()) {
+                        Text(pingResult, fontSize = 13.sp, color = Color(0xFFaaaaaa))
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
             // ── Action Grid ──
