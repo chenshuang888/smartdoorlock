@@ -98,6 +98,10 @@ fun MainScreen(
         }
         bleManager.onConnected = {
             uiState = UiState.Connected
+            scope.launch {
+                kotlinx.coroutines.delay(500)
+                bleManager.send("[HELLO]\n")
+            }
         }
         bleManager.onDisconnected = {
             uiState = UiState.Disconnected
