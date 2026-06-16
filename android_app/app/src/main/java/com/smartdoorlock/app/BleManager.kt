@@ -178,6 +178,9 @@ class BleManager(private val context: Context) {
             rxChar = service.getCharacteristic(UUID.fromString(RX_UUID))
             txChar = service.getCharacteristic(UUID.fromString(TX_UUID))
 
+            // 请求 MTU 升级，确保大消息能一次性通知送达
+            gatt.requestMtu(517)
+
             val tx = txChar
             if (tx != null) {
                 // 启用通知：writeDescriptor 是异步的，等它完成后才触发 onConnected
@@ -195,6 +198,10 @@ class BleManager(private val context: Context) {
                 // 没有 TX 特征值，直接触发
                 onConnected?.invoke()
             }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            android.util.Log.i("ble_mtu", "MTU negotiated: $mtu (status=$status)")
         }
 
         override fun onDescriptorWrite(
