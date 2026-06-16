@@ -101,13 +101,13 @@ class BleManager(private val context: Context) {
             .build()
         scanner.startScan(null, settings, scanCallback)
 
-        // 10秒超时
+        // 15秒超时
         mainHandler.postDelayed({
             if (isScanning) {
                 stopScan()
                 onDeviceNotFound?.invoke()
             }
-        }, 10000)
+        }, 15000)
     }
 
     @SuppressLint("MissingPermission")
