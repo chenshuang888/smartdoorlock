@@ -44,6 +44,7 @@ class BleManager(private val context: Context) {
     var onStartScan: (() -> Unit)? = null
     var onScanFailed: ((String) -> Unit)? = null
     var onDeviceNotFound: (() -> Unit)? = null
+    var onDeviceFound: ((String) -> Unit)? = null
 
     val isConnected: Boolean get() = gatt?.services?.isNotEmpty() == true
 
@@ -59,9 +60,12 @@ class BleManager(private val context: Context) {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            if (device?.name == DEVICE_NAME || result.scanRecord?.deviceName == DEVICE_NAME) {
+            val name = result.scanRecord?.deviceName ?: device?.name ?: ""
+            if (name.isNotEmpty()) onDeviceFound?.invoke(name)
+
+            if (name.equals(DEVICE_NAME, ignoreCase = true)) {
                 stopScan()
-                connect(device)
+                device?.let { connect(it) }
             }
         }
 

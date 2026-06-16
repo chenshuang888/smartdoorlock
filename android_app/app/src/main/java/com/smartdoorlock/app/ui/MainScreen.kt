@@ -62,7 +62,7 @@ fun MainScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
         if (granted.all { it.value }) {
-            bleManager.startScan()
+            checkLocationAndScan(bleManager, context, scope, snackbarHostState)
         } else {
             scope.launch { snackbarHostState.showSnackbar("需要蓝牙权限才能连接门锁") }
         }
@@ -88,6 +88,9 @@ fun MainScreen(
         bleManager.onScanFailed = { msg ->
             scope.launch { snackbarHostState.showSnackbar(msg) }
             uiState = UiState.Disconnected
+        }
+        bleManager.onDeviceFound = { name ->
+            scope.launch { snackbarHostState.showSnackbar("发现设备: $name", duration = SnackbarDuration.Short) }
         }
         bleManager.onDeviceNotFound = {
             scope.launch { snackbarHostState.showSnackbar("未找到门锁，请确保门锁处于广播状态") }
@@ -304,6 +307,22 @@ private fun ActionCard(icon: String, label: String, modifier: Modifier = Modifie
     }
 }
 
+private fun checkLocationAndScan(
+    bleManager: BleManager,
+    context: android.content.Context,
+    scope: CoroutineScope,
+    snackbarHostState: SnackbarHostState
+) {
+    // Android 需要位置服务开启才能进行 BLE 扫描（大多数国产手机强依赖）
+    val locManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+    val locEnabled = locManager?.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) == true ||
+                    locManager?.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER) == true
+    if (!locEnabled) {
+        scope.launch { snackbarHostState.showSnackbar("请在系统设置中开启位置服务，否则搜不到蓝牙设备") }
+    }
+    bleManager.startScan()
+}
+
 private fun checkAndConnect(
     bleManager: BleManager,
     permLauncher: ActivityResultLauncher<Array<String>>,
@@ -321,7 +340,7 @@ private fun checkAndConnect(
         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     if (perms.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
-        bleManager.startScan()
+        checkLocationAndScan(bleManager, context, scope, snackbarHostState)
     } else {
         permLauncher.launch(perms)
     }
