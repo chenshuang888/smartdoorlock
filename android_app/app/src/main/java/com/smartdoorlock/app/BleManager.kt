@@ -12,11 +12,12 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import java.util.UUID
 
-class BleManager(context: Context) {
+class BleManager(private val context: Context) {
 
     companion object {
         const val SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -49,7 +50,7 @@ class BleManager(context: Context) {
     fun isBluetoothEnabled(): Boolean =
         bluetoothAdapter?.isEnabled == true
 
-    fun enableBluetooth(context: Context) {
+    fun enableBluetooth() {
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)

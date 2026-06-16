@@ -1,8 +1,10 @@
 package com.smartdoorlock.app.ui
 
+import android.content.pm.PackageManager
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.*
@@ -21,12 +23,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.smartdoorlock.app.BleManager
 import com.smartdoorlock.app.DoorLockApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 private sealed class UiState {
     object Disconnected : UiState()
@@ -303,9 +306,9 @@ private fun ActionCard(icon: String, label: String, modifier: Modifier = Modifie
 
 private fun checkAndConnect(
     bleManager: BleManager,
-    permLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+    permLauncher: ActivityResultLauncher<Array<String>>,
     context: android.content.Context,
-    scope: androidx.compose.runtime.coroutine.CoroutineScope,
+    scope: CoroutineScope,
     snackbarHostState: SnackbarHostState
 ) {
     if (!bleManager.isBluetoothEnabled()) {
