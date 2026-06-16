@@ -98,10 +98,6 @@ fun MainScreen(
         }
         bleManager.onConnected = {
             uiState = UiState.Connected
-            val key = bleKey
-            if (key != null) {
-                bleManager.send("[AUTH] $key\n")
-            }
         }
         bleManager.onDisconnected = {
             uiState = UiState.Disconnected
@@ -360,6 +356,12 @@ private fun handleBleData(
             try { api.saveKey(hex) } catch (_: Exception) {}
             bleManager.send("[AUTH] $hex\n")
             logBleAction(api, "配对", "收到新密钥")
+        }
+        text.startsWith("[READY]") -> {
+            val key = api.getBleKey()
+            if (key != null) {
+                bleManager.send("[AUTH] $key\n")
+            }
         }
         text.startsWith("[OK]") -> {
             setUiState(UiState.Authenticated)
