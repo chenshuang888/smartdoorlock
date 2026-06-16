@@ -37,6 +37,7 @@ class BleManager(private val context: Context) {
     private var txChar: BluetoothGattCharacteristic? = null
     private var isScanning = false
     private var pendingCccdWrite = false  // 等待 descriptor 写入完成再触发 onConnected
+    private var connectedFired = false    // 防止 onConnected 重复触发
     private val mainHandler = Handler(Looper.getMainLooper())
 
     var onConnected: (() -> Unit)? = null
@@ -141,15 +142,16 @@ class BleManager(private val context: Context) {
         pendingCccdWrite = false
     }
 
-    @Suppress("DEPRECATION")
     fun send(data: String): Boolean {
         val char = rxChar ?: return false
-        val ok = try {
+        val g = gatt ?: return false
+        try {
             char.value = data.toByteArray(Charsets.UTF_8)
-            gatt?.writeCharacteristic(char) ?: false
-        } catch (_: Exception) { false }
-        onDataSent?.invoke(data.trim())
-        return ok
+            // 切到主线程写，避免从 binder 线程直接写时静默失败
+            mainHandler.post { g.writeCharacteristic(char) }
+            onDataSent?.invoke(data.trim())
+            return true
+        } catch (_: Exception) { return false }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -158,6 +160,7 @@ class BleManager(private val context: Context) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     pendingCccdWrite = false
+                    connectedFired = false
                     gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -166,6 +169,7 @@ class BleManager(private val context: Context) {
                     rxChar = null
                     txChar = null
                     pendingCccdWrite = false
+                    connectedFired = false
                     onDisconnected?.invoke()
                 }
             }
@@ -188,13 +192,14 @@ class BleManager(private val context: Context) {
             android.util.Log.i("ble_mtu", "MTU negotiated: $mtu (status=$status)")
 
             // MTU 协商完成后，再写 CCCD 启用通知，避免异步操作冲突
-            val tx = txChar ?: run { onConnected?.invoke(); return }
+            val tx = txChar ?: run { if (!connectedFired) { connectedFired = true; onConnected?.invoke() }; return }
             val desc = tx.getDescriptor(UUID.fromString(CCCD_UUID))
             if (desc != null) {
                 pendingCccdWrite = true
                 desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(desc)
-            } else {
+            } else if (!connectedFired) {
+                connectedFired = true
                 onConnected?.invoke()
             }
         }
@@ -206,7 +211,10 @@ class BleManager(private val context: Context) {
         ) {
             if (pendingCccdWrite && descriptor.uuid.toString().equals(CCCD_UUID, ignoreCase = true)) {
                 pendingCccdWrite = false
-                onConnected?.invoke()
+                if (!connectedFired) {
+                    connectedFired = true
+                    onConnected?.invoke()
+                }
             }
         }
 
