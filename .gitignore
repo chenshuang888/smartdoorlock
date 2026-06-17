@@ -80,4 +80,26 @@ Desktop.ini
 # Android
 android_app/.gradle/
 android_app/local.properties
+android_app/.github/
 *.iml
+
+# Backup / obsolete
+*.zip
+phone_app/
+配对模式认证失败问题.md
+
+# AI / IDE
+.claude/
+
+# 51 MCU build artifacts
+51单片机端/Project/Listings/
+51单片机端/Project/Objects/
+51单片机端/Project/*.uvgui.*
+51单片机端/Project/*.uvopt
+
+# Python cache
+tools/ble_uart/__pycache__/
+web_app/backend/__pycache__/
+
+# Old web frontend (replaced by Android app)
+web_app/frontend/

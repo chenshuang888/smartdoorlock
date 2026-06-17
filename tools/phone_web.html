@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>智能门锁</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1a1a2e;color:#e0e0e0;height:100dvh;display:flex;flex-direction:column;user-select:none;-webkit-tap-highlight-color:transparent}
+
+/* ===== 状态栏 ===== */
+#top-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#16213e;flex-shrink:0}
+#dot{font-size:14px;color:#777;transition:color .3s}
+#status-text{font-size:13px;color:#777;flex:1;transition:color .3s}
+#connect-btn{background:transparent;border:1px solid #0f9b8e;color:#0f9b8e;padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer}
+#connect-btn.danger{border-color:#e74c3c;color:#e74c3c}
+
+/* ===== 主区域 ===== */
+#main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px}
+#lock-icon{font-size:72px;line-height:1;margin-bottom:4px;filter:grayscale(.6);transition:filter .3s}
+#lock-icon.unlocked{filter:grayscale(0)}
+#state-text{font-size:20px;font-weight:600;color:#999;margin-bottom:8px;transition:color .3s}
+#state-text.active{color:#2ecc71}
+#state-text.error{color:#e74c3c}
+
+/* ===== 按钮 ===== */
+.primary-btn{width:100%;max-width:280px;padding:14px 0;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;background:#0f9b8e;color:#fff;transition:opacity .2s}
+.primary-btn:active{opacity:.7}
+.primary-btn.connecting{background:#555;pointer-events:none}
+.primary-btn.connected{background:#e74c3c}
+
+/* 功能按钮组 */
+#actions{width:100%;max-width:320px;margin-top:8px;display:none;flex-direction:column;gap:8px}
+#actions.show{display:flex}
+.action-btn{width:100%;padding:12px 0;border:1px solid #444;border-radius:8px;background:transparent;color:#e0e0e0;font-size:14px;cursor:pointer;text-align:center;transition:background .2s}
+.action-btn:active{background:#2a2a4a}
+.action-btn.danger{border-color:#e74c3c;color:#e74c3c}
+.action-btn.danger:active{background:#2a1a1a}
+.action-btn:disabled{opacity:.4;pointer-events:none}
+
+/* ===== 日志 ===== */
+#log-area{flex-shrink:0;max-height:140px;background:#0d0d1a;border-top:1px solid #222;display:flex;flex-direction:column}
+#log-header{padding:6px 16px;font-size:11px;color:#555;flex-shrink:0}
+#log-content{flex:1;overflow-y:auto;padding:2px 16px 8px;font-size:12px;font-family:Consolas,"Courier New",monospace;line-height:1.6;color:#888}
+.log-msg{color:#888}
+.log-ok{color:#2ecc71}
+.log-err{color:#e74c3c}
+.log-info{color:#f0e68c}
+.log-pwd{color:#e8a87c}
+
+/* ===== 模态框 ===== */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.show{display:flex}
+.modal-box{background:#16213e;border-radius:12px;padding:24px;width:90%;max-width:320px}
+.modal-box h3{margin-bottom:16px;font-size:18px}
+.modal-box input{width:100%;padding:12px;border:1px solid #333;border-radius:8px;background:#1a1a2e;color:#e0e0e0;font-size:20px;text-align:center;letter-spacing:8px;outline:none}
+.modal-box input:focus{border-color:#0f9b8e}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions button{flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer}
+.modal-actions .cancel{background:#333;color:#ccc}
+.modal-actions .confirm{background:#0f9b8e;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- ===== 状态栏 ===== -->
+<div id="top-bar">
+  <span id="dot">○</span>
+  <span id="status-text">未连接</span>
+  <button id="connect-btn" onclick="toggleConnect()">连接</button>
+</div>
+
+<!-- ===== 主区域 ===== -->
+<div id="main">
+  <div id="lock-icon">🔒</div>
+  <div id="state-text">未连接</div>
+  <button class="primary-btn" id="action-connect" onclick="toggleConnect()">连接门锁</button>
+  <div id="actions">
+    <button class="action-btn" onclick="queryPwd()">🔑  查询密码</button>
+    <button class="action-btn" onclick="showSetPwdDialog()">✏️  修改密码</button>
+    <button class="action-btn danger" onclick="unpair()">🗑  解绑门锁</button>
+  </div>
+</div>
+
+<!-- ===== 日志 ===== -->
+<div id="log-area">
+  <div id="log-header">─ 消息 ─</div>
+  <div id="log-content"></div>
+</div>
+
+<!-- ===== 改密弹窗 ===== -->
+<div class="modal-overlay" id="pwd-modal">
+  <div class="modal-box">
+    <h3>修改密码</h3>
+    <input id="pwd-input" type="password" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="6位数字">
+    <div class="modal-actions">
+      <button class="cancel" onclick="hideSetPwdDialog()">取消</button>
+      <button class="confirm" onclick="confirmSetPwd()">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+//  配置
+// =============================================================================
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const DEVICE_NAME  = 'ESP32-SmartLock';
+
+// =============================================================================
+//  状态
+// =============================================================================
+let device      = null;
+let rxChar      = null;
+let txChar      = null;
+let authenticated = false;
+let authTimer   = null;
+let savedKey    = localStorage.getItem('ble_auth_key');
+let logCount    = 0;
+
+// =============================================================================
+//  DOM 引用
+// =============================================================================
+const dot          = document.getElementById('dot');
+const statusText   = document.getElementById('status-text');
+const lockIcon     = document.getElementById('lock-icon');
+const stateText    = document.getElementById('state-text');
+const connectBtn   = document.getElementById('connect-btn');
+const actionBtn    = document.getElementById('action-connect');
+const actionsEl    = document.getElementById('actions');
+const logContent   = document.getElementById('log-content');
+const modal        = document.getElementById('pwd-modal');
+const pwdInput     = document.getElementById('pwd-input');
+
+// =============================================================================
+//  日志
+// =============================================================================
+function log(msg, cls) {
+  const div = document.createElement('div');
+  div.className = cls || 'log-msg';
+  div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logContent.appendChild(div);
+  logContent.scrollTop = logContent.scrollHeight;
+  logCount++;
+  if (logCount > 100) {
+    logContent.removeChild(logContent.firstChild);
+    logCount--;
+  }
+}
+
+// =============================================================================
+//  UI 更新
+// =============================================================================
+function setConnectedUI(connected) {
+  if (connected) {
+    dot.textContent = '●'; dot.style.color = '#0f9b8e';
+    statusText.textContent = '已连接'; statusText.style.color = '#0f9b8e';
+    connectBtn.textContent = '断开'; connectBtn.className = 'danger';
+    actionBtn.textContent = '断开连接'; actionBtn.className = 'primary-btn connected';
+    stateText.textContent = '正在认证…'; stateText.className = '';
+    lockIcon.textContent = '🔒'; lockIcon.className = '';
+    actionsEl.classList.remove('show');
+  } else {
+    dot.textContent = '○'; dot.style.color = '#777';
+    statusText.textContent = '未连接'; statusText.style.color = '#777';
+    connectBtn.textContent = '连接'; connectBtn.className = '';
+    actionBtn.textContent = '连接门锁'; actionBtn.className = 'primary-btn';
+    stateText.textContent = '未连接'; stateText.className = '';
+    lockIcon.textContent = '🔒'; lockIcon.className = '';
+    actionsEl.classList.remove('show');
+    authenticated = false;
+  }
+}
+
+function setAuthUI(ok) {
+  if (ok) {
+    dot.textContent = '●'; dot.style.color = '#2ecc71';
+    statusText.textContent = '已认证'; statusText.style.color = '#2ecc71';
+    stateText.textContent = '已解锁'; stateText.className = 'active';
+    lockIcon.textContent = '🔓'; lockIcon.className = 'unlocked';
+    actionBtn.textContent = '断开连接'; actionBtn.className = 'primary-btn connected';
+    actionsEl.classList.add('show');
+  } else {
+    stateText.textContent = '认证失败'; stateText.className = 'error';
+    lockIcon.textContent = '🔒'; lockIcon.className = '';
+    actionsEl.classList.remove('show');
+  }
+}
+
+function setScanningUI() {
+  dot.textContent = '○'; dot.style.color = '#f0e68c';
+  statusText.textContent = '正在扫描…'; statusText.style.color = '#f0e68c';
+  actionBtn.textContent = '正在扫描…'; actionBtn.className = 'primary-btn connecting';
+}
+
+// =============================================================================
+//  连接 / 断开
+// =============================================================================
+async function toggleConnect() {
+  if (device && device.gatt && device.gatt.connected) {
+    await disconnect();
+    return;
+  }
+  await connect();
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    log('当前浏览器不支持蓝牙 (Web Bluetooth)', 'log-err');
+    return;
+  }
+  setScanningUI();
+
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: DEVICE_NAME }],
+      optionalServices: [SERVICE_UUID]
+    });
+  } catch(e) {
+    if (e.name !== 'NotFoundError') log('选择设备取消', 'log-err');
+    else log('未找到门锁设备', 'log-err');
+    setConnectedUI(false);
+    return;
+  }
+
+  log(`已选择设备 ${device.name}`, 'log-ok');
+
+  // 监听断连
+  device.addEventListener('gattserverdisconnected', onDisconnected);
+
+  try {
+    const server = await device.gatt.connect();
+    log('正在连接…', 'log-info');
+
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    rxChar = await service.getCharacteristic(RX_UUID);
+    txChar = await service.getCharacteristic(TX_UUID);
+
+    // 订阅通知
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', onData);
+
+    setConnectedUI(true);
+    log('已连接 ✓', 'log-ok');
+
+    // 自动认证
+    if (savedKey) {
+      log('检测到保存的密钥，正在认证…', 'log-info');
+      authTimer = setTimeout(() => {
+        send(`[AUTH] ${savedKey}\n`);
+        authTimer = null;
+      }, 600);
+    } else {
+      log('等待配对密钥…', 'log-info');
+    }
+
+  } catch(e) {
+    log(`连接失败: ${e.message}`, 'log-err');
+    setConnectedUI(false);
+  }
+}
+
+async function disconnect() {
+  if (authTimer) { clearTimeout(authTimer); authTimer = null; }
+  try {
+    if (txChar) await txChar.stopNotifications().catch(()=>{});
+  } catch(e) {}
+  try {
+    if (device && device.gatt) await device.gatt.disconnect();
+  } catch(e) {}
+  device = null; rxChar = null; txChar = null;
+  setConnectedUI(false);
+  log('已断开', 'log-msg');
+}
+
+function onDisconnected() {
+  if (authTimer) { clearTimeout(authTimer); authTimer = null; }
+  device = null; rxChar = null; txChar = null; authenticated = false;
+  setConnectedUI(false);
+  log('连接已断开', 'log-err');
+}
+
+// =============================================================================
+//  数据收发
+// =============================================================================
+async function send(text) {
+  if (!rxChar) { log('未连接', 'log-err'); return false; }
+  try {
+    await rxChar.writeValue(new TextEncoder().encode(text));
+    return true;
+  } catch(e) {
+    log(`发送失败: ${e.message}`, 'log-err');
+    return false;
+  }
+}
+
+function onData(event) {
+  const decoder = new TextDecoder();
+  const text = decoder.decode(event.target.value).trim();
+  if (!text) return;
+
+  // [BOND] <32hex>
+  if (text.startsWith('[BOND] ')) {
+    const keyHex = text.substring(7).trim();
+    if (keyHex.length >= 32) {
+      if (authTimer) { clearTimeout(authTimer); authTimer = null; }
+      localStorage.setItem('ble_auth_key', keyHex);
+      savedKey = keyHex;
+      log('收到配对密钥 ✓', 'log-ok');
+      send(`[AUTH] ${keyHex}\n`);
+    }
+    return;
+  }
+
+  // [OK]
+  if (text.startsWith('[OK]')) {
+    authenticated = true;
+    setAuthUI(true);
+    log('认证成功 ✓ 门锁已解锁', 'log-ok');
+    return;
+  }
+
+  // [FAIL]
+  if (text.startsWith('[FAIL]')) {
+    setAuthUI(false);
+    log('认证失败 ✗ 密钥不匹配', 'log-err');
+    return;
+  }
+
+  // [UNPAIRED]
+  if (text.startsWith('[UNPAIRED]')) {
+    localStorage.removeItem('ble_auth_key');
+    savedKey = null;
+    log('门锁已解绑，本地密钥已删除', 'log-info');
+    disconnect();
+    return;
+  }
+
+  // [PWD_DATA:xxxxxx]
+  if (text.startsWith('[PWD_DATA:')) {
+    const pwd = text.substring(10).replace(']','').trim();
+    log(`当前密码: ${pwd}`, 'log-pwd');
+    return;
+  }
+
+  // [PWD_OK]
+  if (text.startsWith('[PWD_OK]')) {
+    log('密码修改成功 ✓', 'log-ok');
+    return;
+  }
+
+  // [PWD_ERR]
+  if (text.startsWith('[PWD_ERR]')) {
+    log('密码修改失败 ✗', 'log-err');
+    return;
+  }
+}
+
+// =============================================================================
+//  功能操作
+// =============================================================================
+async function queryPwd() {
+  const ok = await send('[PWD_QUERY]\n');
+  if (ok) log('查询密码…', 'log-info');
+}
+
+function showSetPwdDialog() {
+  pwdInput.value = '';
+  modal.classList.add('show');
+  setTimeout(() => pwdInput.focus(), 100);
+}
+
+function hideSetPwdDialog() {
+  modal.classList.remove('show');
+}
+
+async function confirmSetPwd() {
+  const val = pwdInput.value.trim();
+  if (val.length !== 6 || !/^\d{6}$/.test(val)) {
+    log('请输入6位数字密码', 'log-err');
+    return;
+  }
+  hideSetPwdDialog();
+  const ok = await send(`[PWD_SET:${val}]\n`);
+  if (ok) log('正在设置密码…', 'log-info');
+}
+
+async function unpair() {
+  if (!confirm('确定要解绑门锁吗？解绑后需要重新配对才能使用。')) return;
+  const ok = await send('[UNPAIR]\n');
+  if (ok) log('正在解绑…', 'log-info');
+}
+
+// =============================================================================
+//  页面加载
+// =============================================================================
+log(`智能门锁已就绪${savedKey ? ' (已保存密钥)' : ''}`, 'log-msg');
+</script>
+</body>
+</html>
