@@ -69,15 +69,17 @@ fun MainScreen(
         }
     }
 
-    // 启动时从服务端同步密钥
+    // 启动时从服务端同步密钥（仅本地无密钥时，避免覆盖新配对的密钥）
     LaunchedEffect(Unit) {
         try {
             withContext(Dispatchers.IO) {
-                val res = api.getKey()
-                val key = res.optString("key", "")
-                if (key.length >= 32) {
-                    api.saveBleKey(key)
-                    bleKey = key
+                if (api.getBleKey() == null) {
+                    val res = api.getKey()
+                    val key = res.optString("key", "")
+                    if (key.length >= 32) {
+                        api.saveBleKey(key)
+                        bleKey = key
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -354,7 +356,9 @@ private fun handleBleData(
             }
             setBleKey(hex)
             showMsg("收到配对密钥")
-            try { api.saveKey(hex) } catch (_: Exception) {}
+            scope.launch(Dispatchers.IO) {
+                try { api.saveKey(hex) } catch (_: Exception) {}
+            }
             scope.launch {
                 delay(300)
                 bleManager.send("[AUTH] $hex\n")
